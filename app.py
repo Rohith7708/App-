@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -5,18 +6,19 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Load and prepare data
-@st.cache_data
-def load_and_prepare_data(file_path):
-    df = pd.read_csv(file_path)
+# App title
+st.set_page_config(page_title="Customer Churn Prediction Dashboard", layout="wide")
+st.title("📉 Customer Churn Prediction with Random Forest")
+
+# Load and prepare the data
+def load_and_prepare_data(df):
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
     df['Churn'] = (df['Churn'] == 'Yes').astype(int)
     df = df.drop(['CustomerID'], axis=1, errors='ignore')
-    categorical_columns = df.select_dtypes(include=['object']).columns
-    df = pd.get_dummies(df, columns=categorical_columns)
+    df = pd.get_dummies(df, columns=df.select_dtypes(include=['object']).columns)
     return df
 
 # Train the model
@@ -30,66 +32,67 @@ def train_churn_model(df):
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train_scaled, y_train)
     y_pred = model.predict(X_test_scaled)
-
     feature_importance = pd.DataFrame({
         'feature': X.columns,
         'importance': model.feature_importances_
     }).sort_values('importance', ascending=False)
-
-    return model, feature_importance, y_test, y_pred, scaler
+    return model, feature_importance, y_test, y_pred, X_test, scaler
 
 # Visualization
-def visualize_results(feature_importance, y_test, y_pred, df):
-    st.subheader("Top 10 Feature Importances")
+def visualize_results(feature_importance, y_test, y_pred, original_df):
+    fig, axs = plt.subplots(2, 2, figsize=(20, 15))
+
+    # Feature Importance
     total_importance = feature_importance['importance'].sum()
     feature_importance['percentage'] = (feature_importance['importance'] / total_importance) * 100
-    fig1, ax1 = plt.subplots()
-    sns.barplot(data=feature_importance.head(10), x='percentage', y='feature', palette='viridis', ax=ax1)
-    ax1.set_title('Top 10 Features Impact (%)')
-    st.pyplot(fig1)
-
-    st.subheader("Confusion Matrix")
+    sns.barplot(data=feature_importance.head(10),
+                x='percentage', y='feature',
+                palette='viridis', ax=axs[0, 0])
+    axs[0, 0].set_title('Top 10 Features Impact (%)')
+    
+    # Confusion Matrix
     cm = confusion_matrix(y_test, y_pred)
-    fig2, ax2 = plt.subplots()
     sns.heatmap(cm, annot=True, fmt='d', cmap='YlOrRd',
                 xticklabels=['Not Churned', 'Churned'],
-                yticklabels=['Not Churned', 'Churned'], ax=ax2)
-    ax2.set_title('Confusion Matrix')
-    st.pyplot(fig2)
-
-    st.subheader("Churn Distribution")
+                yticklabels=['Not Churned', 'Churned'], ax=axs[0, 1])
+    axs[0, 1].set_title('Confusion Matrix')
+    
+    # Churn Distribution
     test_dist = pd.Series(y_test).value_counts(normalize=True) * 100
-    fig3, ax3 = plt.subplots()
-    ax3.pie(test_dist,
-            labels=[f'Not Churned\n({test_dist[0]:.1f}%)', 
-                   f'Churned\n({test_dist[1]:.1f}%)'],
-            colors=['lightblue', 'coral'],
-            autopct='%1.1f%%',
-            explode=(0, 0.1))
-    ax3.set_title('Churn Distribution')
-    st.pyplot(fig3)
+    axs[1, 0].pie(test_dist,
+                  labels=[f'Not Churned\n({test_dist[0]:.1f}%)', f'Churned\n({test_dist[1]:.1f}%)'],
+                  colors=['lightblue', 'coral'],
+                  autopct='%1.1f%%', explode=(0, 0.1))
+    axs[1, 0].set_title('Churn Distribution')
+    
+    # Monthly Charges Boxplot
+    df_subset = original_df.iloc[y_test.index]
+    sns.boxplot(x=y_test, y=df_subset['MonthlyCharges'],
+                palette=['lightblue', 'coral'], ax=axs[1, 1])
+    axs[1, 1].set_title('Monthly Charges by Churn Status')
+    axs[1, 1].set_xlabel('Churn Status (0: Not Churned, 1: Churned)')
+    axs[1, 1].set_ylabel('Monthly Charges')
 
-    st.subheader("Monthly Charges by Churn Status")
-    fig4, ax4 = plt.subplots()
-    sns.boxplot(x=y_test, y=df['MonthlyCharges'], palette=['lightblue', 'coral'], ax=ax4)
-    ax4.set_xlabel('Churn Status (0: Not Churned, 1: Churned)')
-    ax4.set_ylabel('Monthly Charges ($)')
-    ax4.set_title('Monthly Charges by Churn Status')
-    st.pyplot(fig4)
+    plt.tight_layout()
+    st.pyplot(fig)
 
-# Streamlit UI
-st.title("Customer Churn Prediction Dashboard")
+# File upload
+uploaded_file = st.file_uploader("Upload CSV file", type="csv")
 
-uploaded_file = st.file_uploader("Upload your churn CSV file", type=["csv"])
-if uploaded_file is not None:
-    df = load_and_prepare_data(uploaded_file)
-    st.success("Data Loaded and Prepared Successfully!")
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    df_prepared = load_and_prepare_data(df.copy())
 
-    # Train model
-    model, feature_importance, y_test, y_pred, scaler = train_churn_model(df)
+    # Train the model
+    model, feature_importance, y_test, y_pred, X_test, scaler = train_churn_model(df_prepared)
 
-    st.subheader("Model Performance")
-    st.text(classification_report(y_test, y_pred))
+    # Display model performance
+    st.subheader("📋 Classification Report")
+    report = classification_report(y_test, y_pred, output_dict=True)
+    st.dataframe(pd.DataFrame(report).transpose())
 
-    # Visualizations
+    # Visualization
+    st.subheader("📊 Churn Insights Visualization")
     visualize_results(feature_importance, y_test, y_pred, df)
+else:
+    st.info("Please upload a customer churn CSV file to begin.")
