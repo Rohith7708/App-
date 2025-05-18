@@ -2,6 +2,6 @@ streamlit
 pandas
 numpy
 scikit-learn
-matplotlib
 seaborn
-train_test_split
+matplotlib
+
