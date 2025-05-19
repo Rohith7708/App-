@@ -1,5 +1,12 @@
-import streamlit as st import pandas as pd import numpy as np from sklearn.model_selection import train_test_split from sklearn.preprocessing import StandardScaler from sklearn.ensemble import RandomForestClassifier from sklearn.metrics import classification_report, confusion_matrix import seaborn as sns import matplotlib.pyplot as plt
-
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
 App title
 
 st.set_page_config(page_title="Customer Churn Prediction Dashboard", layout="wide") st.title("📉 Customer Churn Prediction with Random Forest")
